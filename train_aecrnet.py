@@ -12,10 +12,11 @@ from torchvision.utils import make_grid
 from metrics import psnr, ssim
 from models.AECRNet import *
 from models.CR import *
-from data_utils.ITS_h5 import ITS_train_loader
-from data_utils.ITS_h5 import ITS_test_loader
-from data_utils.NH import *
-from data_utils.DH import *
+# from data_utils.ITS_h5 import ITS_train_loader
+# from data_utils.ITS_h5 import ITS_test_loader
+# from data_utils.NH import *
+# from data_utils.DH import *
+from data_utils.RS import *
 
 import json
 
@@ -27,12 +28,14 @@ models_={
 }
 
 loaders_={
-	'ITS_train': ITS_train_loader,
-	'ITS_test': ITS_test_loader,
-	'NH_train': NH_train_loader,
-	'NH_test': NH_test_loader,
-	'DH_train': DH_train_loader,
-	'DH_test': DH_test_loader,
+	# 'ITS_train': ITS_train_loader,
+	# 'ITS_test': ITS_test_loader,
+	# 'NH_train': NH_train_loader,
+	# 'NH_test': NH_test_loader,
+	# 'DH_train': DH_train_loader,
+	# 'DH_test': DH_test_loader,
+	'RS_train': RS_train_loader,
+	'RS_test': RS_test_loader,
 }
 
 start_time = time.time()
@@ -65,7 +68,7 @@ def train(net, loader_train, loader_test, optim, criterion):
 		losses = ckp['losses']
 		net.load_state_dict(ckp['model'])
 		optim.load_state_dict(ckp['optimizer'])
-		start_step = ckp['step']
+		start_step = ckp['step']+1
 		max_ssim = ckp['max_ssim']
 		max_psnr = ckp['max_psnr']
 		psnrs = ckp['psnrs']
@@ -75,7 +78,7 @@ def train(net, loader_train, loader_test, optim, criterion):
 	else:
 		print('train from scratch *** ')
 
-	for step in range(start_step+1, steps+1):
+	for step in range(start_step, steps):
 		net.train()
 		lr = opt.lr
 		if not opt.no_lr_sche:
@@ -87,7 +90,8 @@ def train(net, loader_train, loader_test, optim, criterion):
 		x = x.to(opt.device)
 		y = y.to(opt.device)
 
-		out, _, m4, m5 = net(x)
+		# out, _, m4, m5 = net(x)
+		out = net(x)
 
 		loss_vgg7, all_ap, all_an, loss_rec = 0, 0, 0, 0
 		if opt.w_loss_l1 > 0:
@@ -102,7 +106,7 @@ def train(net, loader_train, loader_test, optim, criterion):
 		optim.zero_grad()
 		losses.append(loss.item())
 
-		print(f'\rloss:{loss.item():.5f} l1:{opt.w_loss_l1*loss_rec:.5f} contrast: {opt.w_loss_vgg7*loss_vgg7:.5f} all_ap:{all_ap:.5f} all_an:{all_an:.5f}| step :{step}/{steps}|lr :{lr :.7f} |time_used :{(time.time() - start_time) / 60 :.1f}',end='', flush=True)
+		print(f'\rloss:{loss.item():.5f} l1:{opt.w_loss_l1*loss_rec:.5f} contrast: {opt.w_loss_vgg7*loss_vgg7:.5f} all_ap:{all_ap:.5f} all_an:{all_an:.5f}| step :{step+1}/{steps}|lr :{lr :.7f} |time_used :{(time.time() - start_time) / 60 :.1f}',end='', flush=True)
 
 		# with SummaryWriter(logdir=log_dir, comment=log_dir) as writer:
 		# 		# 	writer.add_scalar('data/loss', loss, step)
@@ -117,7 +121,7 @@ def train(net, loader_train, loader_test, optim, criterion):
 
 			save_model_dir = opt.model_dir
 			with torch.no_grad():
-				ssim_eval, psnr_eval = test(net, loader_test, max_psnr, max_ssim, step)
+				ssim_eval, psnr_eval = test(net, loader_test)
 
 			log = f'\nstep :{step} | epoch: {epoch} | ssim:{ssim_eval:.4f}| psnr:{psnr_eval:.4f}'
 
@@ -131,7 +135,7 @@ def train(net, loader_train, loader_test, optim, criterion):
 			if psnr_eval > max_psnr:
 				max_ssim = max(max_ssim, ssim_eval)
 				max_psnr = max(max_psnr, psnr_eval)
-				save_model_dir = opt.model_dir + '.best'
+				save_model_dir = opt.model_dir.split('.')[0] + '_best.pk'
 				print(
 					f'\n model saved at step :{step}| epoch: {epoch} | max_psnr:{max_psnr:.4f}| max_ssim:{max_ssim:.4f}')
 
@@ -160,7 +164,7 @@ def test(net,loader_test):
 	for i, (inputs, targets) in enumerate(loader_test):
 		inputs = inputs.to(opt.device);targets = targets.to(opt.device)
 		with torch.no_grad():
-			pred, _, _, _ = net(inputs)
+			pred = net(inputs)
 
 		ssim1 = ssim(pred, targets).item()
 		psnr1 = psnr(pred, targets)
