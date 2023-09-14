@@ -1,18 +1,20 @@
 import os
 import torch
 import numpy as np
-from data_utils.RS import RSDota_test_loader
+from data_utils.RS import RS_test_loader, RSDota_test_loader
 from metrics import psnr, ssim
 from models.AECRNet import Dehaze
 from torch.backends import cudnn
 from option import opt
 
+opt.resume = True
 
 models_={
 	'cdnet': Dehaze(3, 3),
 }
 
 loaders_={
+    'RS_test': RS_test_loader,
 	'dota_test': RSDota_test_loader
 }
 
